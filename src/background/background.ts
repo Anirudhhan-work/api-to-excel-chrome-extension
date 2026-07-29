@@ -256,6 +256,17 @@ async function runBackgroundFetch(requestId: string, startPage: number, endPage:
 
   const masterItems: Record<string, any>[] = [];
 
+  // Filter unsafe browser headers before passing to fetch()
+  const cleanHeaders: Record<string, string> = {};
+  const forbiddenHeaders = ['host', 'content-length', 'connection', 'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-fetch-user', 'accept-encoding', 'cookie'];
+  if (req?.headers) {
+    Object.keys(req.headers).forEach(k => {
+      if (!forbiddenHeaders.includes(k.toLowerCase())) {
+        cleanHeaders[k] = req.headers[k];
+      }
+    });
+  }
+
   try {
     for (let page = startPage; page <= endPage; page++) {
       let targetUrl: URL;
@@ -276,7 +287,7 @@ async function runBackgroundFetch(requestId: string, startPage: number, endPage:
 
       const fetchOptions: RequestInit = {
         method: req?.method || 'GET',
-        headers: req?.headers || {},
+        headers: cleanHeaders,
         credentials: 'include'
       };
 
@@ -343,19 +354,17 @@ chrome.runtime.onMessage.addListener((message: ApiExtensionMessage, sender, send
   } else if (message.action === 'EXECUTE_MULTI_PAGE_FETCH') {
     const { requestId, startPage, endPage, limit, jsonPath } = message;
     
-    // Save popup settings to state
     activeJobState.selectedReqId = requestId;
     activeJobState.startPage = startPage;
     activeJobState.endPage = endPage;
     activeJobState.itemsPerPage = limit;
     if (jsonPath !== undefined) activeJobState.jsonPath = jsonPath;
 
-    // Trigger background fetch loop (runs independent of popup window!)
     runBackgroundFetch(requestId, startPage, endPage, limit, jsonPath).then(() => {
       sendResponse({ state: activeJobState });
     });
 
-    return true; // Keep message channel open for async response
+    return true;
   }
 
   return true;
